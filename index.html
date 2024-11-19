@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Crypt::Cipher</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #2ecc71;
+            --background-color: #f5f7fa;
+            --text-color: #2c3e50;
+            --card-background: #ffffff;
+            --border-radius: 12px;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            background-color: var(--background-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            line-height: 1.6;
+            color: var(--text-color);
+        }
+        .container {
+            background-color: var(--card-background);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 35px;
+            width: 100%;
+            max-width: 450px;
+            transition: transform 0.3s ease;
+        }
+        .container:hover {
+            transform: translateY(-5px);
+        }
+        .title {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 25px;
+            font-weight: 600;
+            font-size: 1.8rem;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e6ed;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-encrypt {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-decrypt {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        #result {
+            margin-top: 25px;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            word-break: break-all;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Crypt::Cipher</h1>
+        <div class="input-group">
+            <label for="key">Encryption Key</label>
+            <input type="password" id="key" placeholder="Enter encryption key">
+        </div>
+        <div class="input-group">
+            <label for="text">Text</label>
+            <input type="text" id="text" placeholder="Enter text to encrypt/decrypt">
+        </div>
+        <div class="button-group">
+            <button class="btn btn-encrypt" onclick="processEncrypt()">Encrypt</button>
+            <button class="btn btn-decrypt" onclick="processDecrypt()">Decrypt</button>
+        </div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function encrypt(text, key) {
+            try {
+                const encodedKey = new TextEncoder().encode(key);
+                const keyMaterial = await window.crypto.subtle.importKey(
+                    'raw', 
+                    encodedKey, 
+                    { name: 'PBKDF2' }, 
+                    false, 
+                    ['deriveBits', 'deriveKey']
+                );
+
+                const derivedKey = await window.crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: new TextEncoder().encode('encryption-salt'),
+                        iterations: 100000,
+                        hash: 'SHA-256'
+                    },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+
+                const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+                const encodedText = new TextEncoder().encode(text);
+                const encryptedContent = await window.crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    derivedKey,
+                    encodedText
+                );
+
+                const encryptedData = new Uint8Array(iv.length + encryptedContent.byteLength);
+                encryptedData.set(iv);
+                encryptedData.set(new Uint8Array(encryptedContent), iv.length);
+
+                return btoa(String.fromCharCode.apply(null, encryptedData));
+            } catch (error) {
+                console.error('Encryption error:', error);
+                return 'Encryption failed';
+            }
+        }
+
+        async function decrypt(encryptedText, key) {
+            try {
+                const encodedKey = new TextEncoder().encode(key);
+                const keyMaterial = await window.crypto.subtle.importKey(
+                    'raw', 
+                    encodedKey, 
+                    { name: 'PBKDF2' }, 
+                    false, 
+                    ['deriveBits', 'deriveKey']
+                );
+
+                const derivedKey = await window.crypto.subtle.deriveKey(
+                    {
+                        name: 'PBKDF2',
+                        salt: new TextEncoder().encode('encryption-salt'),
+                        iterations: 100000,
+                        hash: 'SHA-256'
+                    },
+                    keyMaterial,
+                    { name: 'AES-GCM', length: 256 },
+                    true,
+                    ['encrypt', 'decrypt']
+                );
+
+                const encryptedData = new Uint8Array(atob(encryptedText).split('').map(char => char.charCodeAt(0)));
+
+                const iv = encryptedData.slice(0, 12);
+                const data = encryptedData.slice(12);
+
+                const decryptedContent = await window.crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    derivedKey,
+                    data
+                );
+
+                return new TextDecoder().decode(decryptedContent);
+            } catch (error) {
+                console.error('Decryption error:', error);
+                return 'Decryption failed';
+            }
+        }
+
+        async function processEncrypt() {
+            const key = document.getElementById('key').value;
+            const text = document.getElementById('text').value;
+            const result = await encrypt(text, key);
+            document.getElementById('result').textContent = result;
+        }
+
+        async function processDecrypt() {
+            const key = document.getElementById('key').value;
+            const text = document.getElementById('text').value;
+            const result = await decrypt(text, key);
+            document.getElementById('result').textContent = result;
+        }
+    </script>
+</body>
+</html>
